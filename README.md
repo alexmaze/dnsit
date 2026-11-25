@@ -200,4 +200,5 @@ pnpm build        # shared → api → web
 - 阿里云没有批量接口，因此「改主机 IP」是逐条执行，非原子
 - 记录是云端数据的缓存，默认 2 分钟后过期；页面上的「刷新」会强制回源
 - `node:sqlite` 在 Node 24 上仍会打印 ExperimentalWarning，不影响功能
+- `@alicloud/alidns20150109@4.6.1` 的类型声明导出了请求模型类，但运行时入口只导出 Client；适配器改为从 `dist/models/model.js` 取模型类，并有回归测试（`apps/api/src/__tests__/sdk.test.ts`）守住这个假设
 - 不做域名注册/续费/实名信息，不做主机探活（不 ping、不扫端口）

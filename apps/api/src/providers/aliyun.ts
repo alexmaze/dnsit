@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import AliDnsModule from "@alicloud/alidns20150109";
 import type { ProviderKind, RawRecord, RawZone, RecordInput } from "@dnsit/shared";
 import { ProviderError } from "../errors.js";
@@ -40,6 +41,30 @@ interface AliyunClient {
 const AliDnsCtor = ((AliDnsModule as unknown as { default?: unknown }).default ??
   AliDnsModule) as new (config: Record<string, unknown>) => AliyunClient;
 
+type AliyunRequest = Record<string, unknown> & { validate(): void };
+type AliyunRequestCtor = new (body?: Record<string, unknown>) => AliyunRequest;
+
+/**
+ * @alicloud/alidns20150109@4.6.1 的 package.json main 指向 dist/client.js，
+ * 运行时只导出 Client；请求模型类其实在 dist/models/model.js，而 .d.ts 却声称
+ * 它们能从包根导入。SDK 对请求只做 request.validate() + 读字段，所以：
+ * 能取到模型类就用真类（带字段校验），取不到则退化成带 no-op validate 的对象。
+ */
+const ALIYUN_MODELS: Record<string, AliyunRequestCtor> = (() => {
+  try {
+    const nodeRequire = createRequire(import.meta.url);
+    return nodeRequire("@alicloud/alidns20150109/dist/models/model.js") as Record<string, AliyunRequestCtor>;
+  } catch {
+    return {};
+  }
+})();
+
+function aliRequest<T extends Record<string, unknown>>(name: string, body: T): T & AliyunRequest {
+  const Ctor = ALIYUN_MODELS[name];
+  if (Ctor) return new Ctor(body) as T & AliyunRequest;
+  return Object.assign(body, { validate() {} }) as T & AliyunRequest;
+}
+
 interface AliyunRecordShape {
   recordId?: string;
   RR?: string;
@@ -74,7 +99,8 @@ export function normalizeAliyunError(error: unknown): ProviderError {
   const err = error as { code?: string; message?: string; data?: { RequestId?: string }; requestId?: string; statusCode?: number };
   const code = err?.code ?? "UNKNOWN";
   const message = err?.message ?? "阿里云接口调用失败";
-  const requestId = err?.data?.RequestId ?? err?.requestId;
+  const requestId =
+    err?.data?.RequestId ?? err?.requestId ?? /request id:\s*([0-9A-Za-z-]+)/i.exec(message)?.[1];
   if (/^Throttling/i.test(code)) return new ProviderError("RATE_LIMITED", "阿里云接口被限流，请稍后重试", code, requestId, true);
   if (/^(InvalidAccessKeyId|SignatureDoesNotMatch|Forbidden|NoPermission|InvalidSecurityToken)/i.test(code)) {
     return new ProviderError("AUTH_INVALID", "阿里云 AK/SK 无效或权限不足", code, requestId);
@@ -94,8 +120,13 @@ export function normalizeAliyunError(error: unknown): ProviderError {
   if (err?.statusCode && err.statusCode >= 500) {
     return new ProviderError("NETWORK", "阿里云服务暂时不可用", code, requestId, true);
   }
-  if (error instanceof TypeError || (error as { code?: string })?.code === "ECONNRESET") {
+  const cause = (error as { cause?: unknown })?.cause;
+  if (cause || /^ECONNRESET|ENOTFOUND|ETIMEDOUT|EAI_AGAIN$/.test(code) || /fetch failed|socket hang up/i.test(message)) {
     return new ProviderError("NETWORK", "网络异常，请检查本机网络", code, requestId, true);
+  }
+  if (error instanceof TypeError) {
+    // 以前这里一律归类成「网络异常」，把 SDK 的编程错误盖掉了，排查时误导性很强
+    return new ProviderError("UNKNOWN", `阿里云 SDK 调用异常：${message}`, "SDK_ERROR", requestId);
   }
   return new ProviderError("UNKNOWN", message, code, requestId);
 }
@@ -137,14 +168,14 @@ export class AliyunProvider implements DnsProvider {
   }
 
   async verify(): Promise<void> {
-    await this.run(() => this.client.describeDomains({ pageNumber: 1, pageSize: 1 }));
+    await this.run(() => this.client.describeDomains(aliRequest("DescribeDomainsRequest", { pageNumber: 1, pageSize: 1 })));
   }
 
   async listZones(): Promise<RawZone[]> {
     const zones: RawZone[] = [];
     let page = 1;
     for (;;) {
-      const response = await this.run(() => this.client.describeDomains({ pageNumber: page, pageSize: 100 }));
+      const response = await this.run(() => this.client.describeDomains(aliRequest("DescribeDomainsRequest", { pageNumber: page, pageSize: 100 })));
       const body = response.body;
       const list = body?.domains?.domain ?? [];
       for (const item of list) {
@@ -170,7 +201,9 @@ export class AliyunProvider implements DnsProvider {
     let page = 1;
     for (;;) {
       const response = await this.run(() =>
-        this.client.describeDomainRecords({ domainName: zone.name, pageNumber: page, pageSize: 500 }),
+        this.client.describeDomainRecords(
+          aliRequest("DescribeDomainRecordsRequest", { domainName: zone.name, pageNumber: page, pageSize: 500 }),
+        ),
       );
       const body = response.body;
       const list = body?.domainRecords?.record ?? [];
@@ -183,13 +216,13 @@ export class AliyunProvider implements DnsProvider {
   }
 
   async getRecord(_zone: ZoneRef, remoteId: string): Promise<RawRecord> {
-    const response = await this.run(() => this.client.describeDomainRecordInfo({ recordId: remoteId }));
+    const response = await this.run(() => this.client.describeDomainRecordInfo(aliRequest("DescribeDomainRecordInfoRequest", { recordId: remoteId })));
     return mapRecord(response.body as AliyunRecordShape);
   }
 
   async createRecord(zone: ZoneRef, input: RecordInput): Promise<RawRecord> {
     const response = await this.run(() =>
-      this.client.addDomainRecord({
+      this.client.addDomainRecord(aliRequest("AddDomainRecordRequest", {
         domainName: zone.name,
         RR: input.name === "@" ? "@" : input.name,
         type: input.type,
@@ -197,7 +230,7 @@ export class AliyunProvider implements DnsProvider {
         TTL: input.ttl,
         line: input.line,
         priority: input.type === "MX" ? input.priority : undefined,
-      }),
+      })),
     );
     const recordId = response.body?.recordId;
     if (!recordId) throw new ProviderError("UNKNOWN", "阿里云未返回记录 ID", "NoRecordId");
@@ -206,7 +239,7 @@ export class AliyunProvider implements DnsProvider {
 
   async updateRecord(zone: ZoneRef, remoteId: string, input: RecordInput): Promise<RawRecord> {
     await this.run(() =>
-      this.client.updateDomainRecord({
+      this.client.updateDomainRecord(aliRequest("UpdateDomainRecordRequest", {
         recordId: remoteId,
         RR: input.name === "@" ? "@" : input.name,
         type: input.type,
@@ -214,11 +247,13 @@ export class AliyunProvider implements DnsProvider {
         TTL: input.ttl,
         line: input.line,
         priority: input.type === "MX" ? input.priority : undefined,
-      }),
+      })),
     );
     if (input.remark !== undefined) {
       try {
-        await this.run(() => this.client.updateDomainRecordRemark({ recordId: remoteId, remark: input.remark }));
+        await this.run(() => this.client.updateDomainRecordRemark(
+          aliRequest("UpdateDomainRecordRemarkRequest", { recordId: remoteId, remark: input.remark }),
+        ));
       } catch {
         // 备注是第二步，失败不回滚主记录
       }
@@ -227,15 +262,15 @@ export class AliyunProvider implements DnsProvider {
   }
 
   async deleteRecord(_zone: ZoneRef, remoteId: string): Promise<void> {
-    await this.run(() => this.client.deleteDomainRecord({ recordId: remoteId }));
+    await this.run(() => this.client.deleteDomainRecord(aliRequest("DeleteDomainRecordRequest", { recordId: remoteId })));
   }
 
   async setStatus(_zone: ZoneRef, remoteId: string, status: "ENABLE" | "DISABLE"): Promise<void> {
-    await this.run(() => this.client.setDomainRecordStatus({ recordId: remoteId, status }));
+    await this.run(() => this.client.setDomainRecordStatus(aliRequest("SetDomainRecordStatusRequest", { recordId: remoteId, status })));
   }
 
   async listLines(zone: ZoneRef): Promise<LineOption[]> {
-    const response = await this.run(() => this.client.describeDomainInfo({ domainName: zone.name }));
+    const response = await this.run(() => this.client.describeDomainInfo(aliRequest("DescribeDomainInfoRequest", { domainName: zone.name })));
     const lines = (response.body?.recordLines?.recordLine ?? []) as Array<{
       lineCode?: string;
       lineName?: string;
