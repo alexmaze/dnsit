@@ -4,12 +4,14 @@ import type { AppContext } from "../context.js";
 import { HttpError, ProviderError } from "../errors.js";
 import { createProvider } from "../providers/index.js";
 import type { DnsProvider } from "../providers/index.js";
+import { tx } from "../db.js";
 import {
   countZonesForAccount,
   deleteAccountRow,
   getAccountRow,
   insertAccount,
   listAccountRows,
+  listZoneRows,
   toAccountSummary,
   updateAccountRow,
 } from "../repo.js";
@@ -100,8 +102,15 @@ export async function patchAccount(
   patch: { name?: string; accessKeyId?: string; accessKeySecret?: string; readonly?: boolean },
 ): Promise<AccountSummary> {
   const existing = getAccount(ctx, id);
-  const nextName = patch.name ?? existing.name;
+  const nextName = patch.name?.trim() || existing.name;
   const nextKeyId = patch.accessKeyId ?? existing.access_key_id;
+
+  if (nextName.toLowerCase() !== existing.name.toLowerCase()) {
+    const clash = listAccountRows(ctx.db).find(
+      (row) => row.id !== id && row.provider === existing.provider && row.name.toLowerCase() === nextName.toLowerCase(),
+    );
+    if (clash) throw new HttpError(409, "ACCOUNT_EXISTS", `已存在同名账号：${nextName}`);
+  }
 
   if (patch.accessKeySecret || patch.accessKeyId) {
     const secret = patch.accessKeySecret ?? ctx.box.decrypt(
@@ -141,9 +150,25 @@ export async function patchAccount(
   return summarise(ctx, getAccountRow(ctx.db, id)!);
 }
 
-export function removeAccount(ctx: AppContext, id: string): void {
+export function removeAccount(ctx: AppContext, id: string): { zones: number; records: number } {
   getAccount(ctx, id);
-  deleteAccountRow(ctx.db, id);
+  const zones = listZoneRows(ctx.db, id);
+  const recordRow = ctx.db
+    .prepare("SELECT COUNT(*) AS n FROM records WHERE zone_id IN (SELECT id FROM zones WHERE account_id = ?)")
+    .get(id) as { n: number };
+  const recordCount = recordRow?.n ?? 0;
+
+  tx(ctx.db, () => {
+    // record_host_links 不设外键（记录只是缓存），必须手动清理，否则主机的引用数会虚高
+    for (const zone of zones) {
+      ctx.db.prepare("DELETE FROM record_host_links WHERE zone_id = ?").run(zone.id);
+    }
+    // 审计要保留，但别指向一个已不存在的账号，否则按账号筛选会查到幽灵数据
+    ctx.db.prepare("UPDATE audit_logs SET account_id = NULL WHERE account_id = ?").run(id);
+    deleteAccountRow(ctx.db, id);
+  });
+
+  return { zones: zones.length, records: recordCount };
 }
 
 export async function verifyAccount(ctx: AppContext, id: string): Promise<AccountSummary> {

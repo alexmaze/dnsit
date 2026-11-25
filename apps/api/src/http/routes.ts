@@ -89,8 +89,8 @@ export function apiRoutes(ctx: AppContext): Hono {
     return c.json({ data: await patchAccount(ctx, c.req.param("id"), payload) });
   });
   api.delete("/accounts/:id", (c) => {
-    removeAccount(ctx, c.req.param("id"));
-    return c.json({ data: { deleted: true } });
+    const result = removeAccount(ctx, c.req.param("id"));
+    return c.json({ data: { deleted: true, ...result } });
   });
   api.post("/accounts/:id/verify", async (c) => c.json({ data: await verifyAccount(ctx, c.req.param("id")) }));
 

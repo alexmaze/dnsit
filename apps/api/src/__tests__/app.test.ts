@@ -4,6 +4,7 @@ import { createApp } from "../app.js";
 import type { AppContext } from "../context.js";
 import { SecretBox } from "../crypto.js";
 import { openDatabase } from "../db.js";
+import { insertAccount } from "../repo.js";
 import { loadConfig } from "../env.js";
 
 function makeContext(): AppContext {
@@ -109,6 +110,54 @@ describe("api app", () => {
     expect(payload.data[0]!.ok).toBe(true);
     expect(payload.data[1]!.ok).toBe(false);
     expect(payload.data[2]!.ips).toEqual(["2.2.2.2", "2001:db8::2"]);
+  });
+
+  it("renames an account without re-verifying, and deletes it", async () => {
+    insertAccount(ctx.db, {
+      id: "acc_x",
+      provider: "tencent",
+      name: "旧名字",
+      accessKeyId: "AKIDxxxx",
+      sealed: { cipher: "c", iv: "i", tag: "t", keyVersion: 1 },
+      readonly: false,
+    });
+
+    const renamed = await app.request("/api/accounts/acc_x", {
+      method: "PATCH",
+      headers: WRITE,
+      body: JSON.stringify({ name: "新名字" }),
+    });
+    expect(renamed.status).toBe(200);
+    const renamedBody = (await renamed.json()) as { data: { name: string; accessKeyMasked: string } };
+    expect(renamedBody.data.name).toBe("新名字");
+    expect(renamedBody.data.accessKeyMasked).not.toContain("xxxx");
+
+    const removed = await app.request("/api/accounts/acc_x", { method: "DELETE", headers: WRITE });
+    expect(removed.status).toBe(200);
+    const removedBody = (await removed.json()) as { data: { deleted: boolean; zones: number } };
+    expect(removedBody.data).toMatchObject({ deleted: true, zones: 0 });
+
+    const list = await app.request("/api/accounts", { headers: READ });
+    expect(((await list.json()) as { data: unknown[] }).data).toHaveLength(0);
+  });
+
+  it("rejects renaming to an existing account name", async () => {
+    for (const [id, name] of [["acc_a", "甲"], ["acc_b", "乙"]]) {
+      insertAccount(ctx.db, {
+        id,
+        provider: "aliyun",
+        name,
+        accessKeyId: "LTAI0000",
+        sealed: { cipher: "c", iv: "i", tag: "t", keyVersion: 1 },
+        readonly: false,
+      });
+    }
+    const response = await app.request("/api/accounts/acc_b", {
+      method: "PATCH",
+      headers: WRITE,
+      body: JSON.stringify({ name: "甲" }),
+    });
+    expect(response.status).toBe(409);
   });
 
   it("returns 404 for unknown routes", async () => {

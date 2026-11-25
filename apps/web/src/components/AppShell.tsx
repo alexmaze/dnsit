@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
-import { Server, Globe, History, Plus, RefreshCw } from "lucide-react";
+import { Server, Globe, History, Plus, RefreshCw, CloudCog } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { AccountSummary, ZoneSummary } from "@dnsit/shared";
 import { api } from "@/api/client";
@@ -130,6 +130,10 @@ export function AppShell() {
         </ScrollArea>
 
         <div className="space-y-0.5 border-t border-border/60 p-2">
+          <NavLink to="/accounts" className={navClass}>
+            <CloudCog className="size-3.5 opacity-70" />
+            云账号
+          </NavLink>
           <NavLink to="/hosts" className={navClass}>
             <Server className="size-3.5 opacity-70" />
             主机

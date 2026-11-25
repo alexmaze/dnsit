@@ -5,6 +5,7 @@ import { ZoneDetail } from "@/pages/ZoneDetail";
 import { HostsPage } from "@/pages/HostsPage";
 import { HostDetailPage } from "@/pages/HostDetailPage";
 import { AuditPage } from "@/pages/AuditPage";
+import { AccountsPage } from "@/pages/AccountsPage";
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
         <Route path="zones/:zoneId" element={<ZoneDetail />} />
         <Route path="hosts" element={<HostsPage />} />
         <Route path="hosts/:hostId" element={<HostDetailPage />} />
+        <Route path="accounts" element={<AccountsPage />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

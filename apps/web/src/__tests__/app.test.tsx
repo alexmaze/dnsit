@@ -65,6 +65,19 @@ function stubFetch() {
       const url = String(input);
       const json = (data: unknown) =>
         new Response(JSON.stringify({ data }), { status: 200, headers: { "content-type": "application/json" } });
+      if (url.includes("/accounts"))
+        return json([
+          {
+            id: "a1",
+            provider: "aliyun",
+            name: "阿里-主站",
+            accessKeyMasked: "LTAI****3f9c",
+            readonly: false,
+            status: "ok",
+            lastVerifiedAt: new Date().toISOString(),
+            zoneCount: 1,
+          },
+        ]);
       if (url.includes("/records")) return json(records);
       if (url.includes("/zones")) return json([zone]);
       if (url.includes("/hosts")) return json([]);
@@ -95,10 +108,20 @@ describe("web app", () => {
     expect(screen.getByText("dnsit")).toBeTruthy();
   });
 
+  it("lists cloud accounts with edit and delete actions", async () => {
+    stubFetch();
+    renderApp("/accounts");
+    // 账号名同时出现在侧栏与表格里
+    await waitFor(() => expect(screen.getAllByText("阿里-主站").length).toBeGreaterThan(0));
+    expect(screen.getAllByText("编辑").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("删除").length).toBeGreaterThan(0);
+    expect(screen.getByText("LTAI****3f9c")).toBeTruthy();
+  });
+
   it("mounts a cname under its target and flags dangling targets", async () => {
     stubFetch();
     renderApp("/zones/z1");
-    await waitFor(() => expect(screen.getByText("example.com")).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "example.com" })).toBeTruthy());
     // 悬空目标提示
     await waitFor(() => expect(screen.getAllByText("未挂载").length).toBeGreaterThan(0));
     // CNAME 目标节点存在
