@@ -1,0 +1,27 @@
+{
+  "name": "@dnsit/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@dnsit/shared": "workspace:*",
+    "@alicloud/alidns20150109": "4.6.1",
+    "@hono/node-server": "^2.1.11",
+    "hono": "^4.13.22",
+    "tencentcloud-sdk-nodejs-dnspod": "4.1.266",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "^5.1.1"
+  }
+}

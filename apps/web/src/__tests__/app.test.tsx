@@ -1,0 +1,108 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { describe, expect, it, vi } from "vitest";
+import App from "@/App";
+
+const zone = {
+  id: "z1",
+  accountId: "a1",
+  accountName: "阿里-主站",
+  provider: "aliyun",
+  name: "example.com",
+  recordCount: 3,
+  lastSyncedAt: new Date().toISOString(),
+};
+
+const records = {
+  zoneName: "example.com",
+  syncedAt: new Date().toISOString(),
+  records: [
+    {
+      id: "z1:1",
+      zoneId: "z1",
+      remoteId: "1",
+      name: "api",
+      fqdn: "api.example.com",
+      type: "A",
+      value: "1.2.3.4",
+      ttl: 600,
+      line: { code: "default", label: "默认" },
+      status: "ENABLE",
+    },
+    {
+      id: "z1:2",
+      zoneId: "z1",
+      remoteId: "2",
+      name: "blog",
+      fqdn: "blog.example.com",
+      type: "CNAME",
+      value: "gone.example.com",
+      ttl: 600,
+      line: { code: "default", label: "默认" },
+      status: "ENABLE",
+    },
+    {
+      id: "z1:3",
+      zoneId: "z1",
+      remoteId: "3",
+      name: "www",
+      fqdn: "www.example.com",
+      type: "CNAME",
+      value: "api.example.com",
+      ttl: 600,
+      line: { code: "default", label: "默认" },
+      status: "ENABLE",
+    },
+  ],
+};
+
+function stubFetch() {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const json = (data: unknown) =>
+        new Response(JSON.stringify({ data }), { status: 200, headers: { "content-type": "application/json" } });
+      if (url.includes("/records")) return json(records);
+      if (url.includes("/zones")) return json([zone]);
+      if (url.includes("/hosts")) return json([]);
+      if (url.includes("/audit")) return json({ items: [], total: 0 });
+      return json([]);
+    }),
+  );
+}
+
+function renderApp(path: string) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[path]}>
+        <TooltipProvider>
+          <App />
+        </TooltipProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+describe("web app", () => {
+  it("renders the dashboard shell", async () => {
+    stubFetch();
+    renderApp("/");
+    await waitFor(() => expect(screen.getByText("总览")).toBeTruthy());
+    expect(screen.getByText("dnsit")).toBeTruthy();
+  });
+
+  it("mounts a cname under its target and flags dangling targets", async () => {
+    stubFetch();
+    renderApp("/zones/z1");
+    await waitFor(() => expect(screen.getByText("example.com")).toBeTruthy());
+    // 悬空目标提示
+    await waitFor(() => expect(screen.getAllByText("未挂载").length).toBeGreaterThan(0));
+    // CNAME 目标节点存在
+    expect(screen.getAllByText("api").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("www").length).toBeGreaterThan(0);
+  });
+});

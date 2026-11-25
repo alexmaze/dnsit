@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.local
+data/
+*.db
+*.db-journal
+.pnpm-store/
+.pnpm-cache/
+.cache/
+.data/
+coverage/
+*.tsbuildinfo
+apps/web/dist/
+.DS_Store

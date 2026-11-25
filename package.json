@@ -1,0 +1,24 @@
+{
+  "name": "dnsit",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "presetup": "pnpm --filter @dnsit/shared build",
+    "setup": "pnpm install && pnpm --filter @dnsit/shared build",
+    "predev": "pnpm --filter @dnsit/shared build",
+    "dev": "pnpm -r --parallel --stream run dev",
+    "build": "pnpm --filter @dnsit/shared build && pnpm --filter @dnsit/api build && pnpm --filter @dnsit/web build",
+    "start": "node apps/api/dist/index.js",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "@alicloud/openapi-core"
+    ]
+  }
+}
