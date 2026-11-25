@@ -22,14 +22,22 @@ export interface AppConfig {
   webDist: string;
 }
 
+function list(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export function loadConfig(): AppConfig {
   const dataDir = path.join(PKG_ROOT, "data");
   const rawDb = process.env.DATABASE_URL ?? `file:${path.join(dataDir, "dnsit.db")}`;
   const dbFile = rawDb.startsWith("file:") ? rawDb.slice("file:".length) : rawDb;
   const port = num(process.env.PORT, 8787);
+  const host = process.env.HOST?.trim() || "127.0.0.1";
   return {
     port,
-    host: "127.0.0.1",
+    host,
     dbFile: path.isAbsolute(dbFile) ? dbFile : path.resolve(PKG_ROOT, dbFile),
     dataDir,
     masterKey: process.env.DNSIT_MASTER_KEY,
@@ -43,6 +51,7 @@ export function loadConfig(): AppConfig {
       `http://localhost:${port}`,
       "http://127.0.0.1:5173",
       "http://localhost:5173",
+      ...list(process.env.DNSIT_ALLOWED_ORIGINS),
     ],
     webDist: path.resolve(PKG_ROOT, "../web/dist"),
   };

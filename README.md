@@ -93,6 +93,74 @@ A/AAAA 记录在编辑弹窗里点「选择主机」即可绑定，记录值由�
 
 数据都在 `apps/api/data/`：`dnsit.db`（SQLite）与 `master.key`（主密钥）。**备份时两者都要**，缺一不可解密。
 
+## 部署（Caddy + Docker）
+
+线上地址：**https://dnsit-sg.refme.cc** —— Caddy 负责 TLS 与 basic_auth，反向代理到容器；容器只挂在 `dapps_default` network 上，不映射宿主机端口。
+
+### 1. 构建
+
+```bash
+pnpm install && pnpm build
+```
+
+### 2. 起容器
+
+```bash
+docker compose up -d
+```
+
+容器名 `dnsit`，以只读方式挂载本仓库（`/app:ro`），数据放在命名卷 `dnsit_dnsit-data`，健康检查打 `/api/health`。因为不 publish 端口，172.18.0.x 之外无法直连，唯一入口是 Caddy。
+
+### 3. 反向代理
+
+在 `/home/alex/sg/dapps/data/caddy/etc/Caddyfile` 追加：
+
+```caddy
+dnsit-sg.refme.cc {
+    encode zstd gzip
+
+    basic_auth {
+        alex <bcrypt-hash>
+    }
+
+    reverse_proxy dnsit:8787 {
+        header_up -Authorization
+        header_up X-Real-IP {remote_host}
+    }
+}
+```
+
+`header_up -Authorization` 会在转发前剥掉 basic_auth 的凭据，避免把口令带给应用。
+
+```bash
+docker exec caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+```
+
+### 4. 更新
+
+代码是只读挂载，改完重新构建即可，不需要重建镜像：
+
+```bash
+pnpm build && docker compose restart dnsit
+```
+
+### 5. 备份
+
+`master.key` 与 `dnsit.db` 必须一起备份，缺一则 AK/SK 不可解：
+
+```bash
+docker run --rm -v dnsit_dnsit-data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/dnsit-data.tgz -C /data .
+```
+
+### 部署相关的环境变量
+
+| 变量 | 容器内取值 | 说明 |
+|---|---|---|
+| `HOST` | `0.0.0.0` | 容器内必须监听全网卡，由 network 隔离 |
+| `DNSIT_ALLOWED_ORIGINS` | `https://dnsit-sg.refme.cc` | 写请求 Origin 白名单，缺了会 403 |
+
 ## 项目结构
 
 ```

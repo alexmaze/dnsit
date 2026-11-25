@@ -1,0 +1,40 @@
+name: dnsit
+
+services:
+  dnsit:
+    image: node:24-bookworm-slim
+    container_name: dnsit
+    restart: unless-stopped
+    working_dir: /app
+    command: ["node", "apps/api/dist/index.js"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8787"
+      DATABASE_URL: "file:/app/apps/api/data/dnsit.db"
+      # 反代后的浏览器 Origin；写请求的 CSRF 校验依赖它
+      DNSIT_ALLOWED_ORIGINS: "https://dnsit-sg.refme.cc"
+      ALIYUN_QPS: "5"
+      TENCENT_QPS: "10"
+      RECORD_CACHE_TTL: "120"
+      ZONE_CACHE_TTL: "300"
+    volumes:
+      - /home/alex/repos/dnsit:/app:ro
+      - dnsit-data:/app/apps/api/data
+    expose:
+      - "8787"
+    networks:
+      - dapps_default
+    healthcheck:
+      test:
+        ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  dnsit-data:
+
+networks:
+  dapps_default:
+    external: true

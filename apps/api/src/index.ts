@@ -19,6 +19,7 @@ function main(): void {
 
   serve({ fetch: app.fetch, port: config.port, hostname: config.host }, (info) => {
     console.log(`\ndnsit api  →  http://${config.host}:${info.port}`);
+    console.log(`允许来源    →  ${config.allowedOrigins.join(", ")}`);
     console.log(`数据库      →  ${config.dbFile}`);
     if (created) {
       console.log("主密钥      →  已生成 data/master.key（0600），请务必备份；丢失后需重新录入 AK/SK");
