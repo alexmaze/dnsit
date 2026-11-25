@@ -6,6 +6,7 @@ import type { AccountSummary, ZoneSummary } from "@dnsit/shared";
 import { api } from "@/api/client";
 import { useAccounts, useZones } from "@/api/queries";
 import { AccountDialog } from "@/components/AccountDialog";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -90,6 +91,7 @@ export function AppShell() {
             <p className="truncate text-sm font-semibold">dnsit</p>
             <p className="truncate text-[11px] text-muted-foreground">多云域名与解析</p>
           </div>
+          <ThemeToggle />
           <Button
             size="icon"
             variant="ghost"

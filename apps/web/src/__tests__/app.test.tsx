@@ -106,6 +106,7 @@ describe("web app", () => {
     renderApp("/");
     await waitFor(() => expect(screen.getByText("总览")).toBeTruthy());
     expect(screen.getByText("dnsit")).toBeTruthy();
+    expect(screen.getByLabelText("切换主题")).toBeTruthy();
   });
 
   it("lists cloud accounts with edit and delete actions", async () => {
