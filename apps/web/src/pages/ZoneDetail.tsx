@@ -47,6 +47,7 @@ export function ZoneDetail() {
         record.name.toLowerCase().includes(keyword) ||
         record.value.toLowerCase().includes(keyword) ||
         record.fqdn.toLowerCase().includes(keyword) ||
+        (record.remark ?? "").toLowerCase().includes(keyword) ||
         (record.host?.hostName.toLowerCase().includes(keyword) ?? false)
       );
     });
@@ -158,7 +159,7 @@ export function ZoneDetail() {
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索主机记录 / 值 / 主机名"
+              placeholder="搜索主机记录 / 值 / 备注 / 主机名"
               className="h-8 w-64 pl-7 text-xs"
             />
           </div>

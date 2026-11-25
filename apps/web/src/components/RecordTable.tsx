@@ -35,6 +35,7 @@ export function RecordTable({
             <TableHead className="w-40">主机记录</TableHead>
             <TableHead className="w-20">类型</TableHead>
             <TableHead>值</TableHead>
+            <TableHead className="w-52">备注</TableHead>
             <TableHead className="w-20 text-right">TTL</TableHead>
             <TableHead className="w-24">线路</TableHead>
             <TableHead className="w-20">状态</TableHead>
@@ -50,8 +51,20 @@ export function RecordTable({
                   {record.type}
                 </Badge>
               </TableCell>
-              <TableCell className="max-w-[420px]">
+              <TableCell className="max-w-[360px]">
                 <RecordValue record={record} />
+              </TableCell>
+              <TableCell className="max-w-52">
+                {record.remark ? (
+                  <span
+                    className="block truncate text-[11px] text-muted-foreground"
+                    title={record.remark}
+                  >
+                    {record.remark}
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-muted-foreground/40">—</span>
+                )}
               </TableCell>
               <TableCell className="text-right font-mono text-[11px] text-muted-foreground">{record.ttl}</TableCell>
               <TableCell className="truncate text-[11px] text-muted-foreground">{record.line.label}</TableCell>

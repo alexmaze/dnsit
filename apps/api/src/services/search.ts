@@ -24,9 +24,10 @@ export function searchAll(ctx: AppContext, rawQuery: string): SearchResult {
       `SELECT r.zone_id, r.remote_record_id, r.name, r.type, r.value, z.name AS zone_name FROM records r
        JOIN zones z ON z.id = r.zone_id
        WHERE lower(r.name) LIKE ? OR lower(r.value) LIKE ? OR lower(r.name || '.' || z.name) LIKE ?
+          OR lower(COALESCE(r.remark, '')) LIKE ?
        ORDER BY r.name LIMIT 40`,
     )
-    .all(like, like, like) as unknown as Array<{
+    .all(like, like, like, like) as unknown as Array<{
     zone_id: string;
     remote_record_id: string;
     name: string;

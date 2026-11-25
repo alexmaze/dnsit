@@ -30,6 +30,7 @@ const records = {
       ttl: 600,
       line: { code: "default", label: "默认" },
       status: "ENABLE",
+      remark: "主站后端",
     },
     {
       id: "z1:2",
@@ -128,5 +129,7 @@ describe("web app", () => {
     // CNAME 目标节点存在
     expect(screen.getAllByText("api").length).toBeGreaterThan(0);
     expect(screen.getAllByText("www").length).toBeGreaterThan(0);
+    // 云端备注被展示出来
+    expect(screen.getAllByText("主站后端").length).toBeGreaterThan(0);
   });
 });

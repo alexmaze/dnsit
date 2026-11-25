@@ -70,8 +70,18 @@ export function RecordRow({
       <Badge variant="outline" className="h-5 w-14 shrink-0 justify-center font-mono text-[10px]">
         {record.type}
       </Badge>
-      <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <RecordValue record={record} />
+        {record.remark ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="max-w-56 truncate rounded bg-muted/70 px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                {record.remark}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-sm">{record.remark}</TooltipContent>
+          </Tooltip>
+        ) : null}
       </div>
       <span className="w-16 shrink-0 text-right font-mono text-[11px] text-muted-foreground">{record.ttl}s</span>
       <span className="w-20 shrink-0 truncate text-[11px] text-muted-foreground">{record.line.label}</span>
