@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Upload } from "lucide-react";
+import { Link2, Plus, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
 import type { HostDTO } from "@dnsit/shared";
 import { api, errorMessage } from "@/api/client";
 import { useHosts } from "@/api/queries";
 import { HostFormDialog } from "@/components/HostFormDialog";
 import { HostImportDialog } from "@/components/HostImportDialog";
+import { HostMatchDialog } from "@/components/HostMatchDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,7 @@ export function HostsPage() {
   const [query, setQuery] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [matchOpen, setMatchOpen] = useState(false);
   const [editing, setEditing] = useState<HostDTO | undefined>(undefined);
 
   const filtered = useMemo(() => {
@@ -65,6 +67,9 @@ export function HostsPage() {
                 className="h-8 w-56 pl-7 text-xs"
               />
             </div>
+            <Button variant="outline" size="sm" onClick={() => setMatchOpen(true)}>
+              <Link2 className="size-3.5" /> 按 IP 匹配
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
               <Upload className="size-3.5" /> 批量导入
             </Button>
@@ -194,6 +199,7 @@ export function HostsPage() {
         />
       ) : null}
       {importOpen ? <HostImportDialog open onOpenChange={() => setImportOpen(false)} /> : null}
+      {matchOpen ? <HostMatchDialog open onOpenChange={() => setMatchOpen(false)} /> : null}
     </div>
   );
 }

@@ -120,6 +120,13 @@ describe("web app", () => {
     expect(screen.getByText("LTAI****3f9c")).toBeTruthy();
   });
 
+  it("offers ip matching on the hosts page", async () => {
+    stubFetch();
+    renderApp("/hosts");
+    await waitFor(() => expect(screen.getByText("按 IP 匹配")).toBeTruthy());
+    expect(screen.getByText("批量导入")).toBeTruthy();
+  });
+
   it("mounts a cname under its target and flags dangling targets", async () => {
     stubFetch();
     renderApp("/zones/z1");

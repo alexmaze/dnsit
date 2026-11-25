@@ -16,6 +16,7 @@ import type { AppContext } from "../context.js";
 import { HttpError } from "../errors.js";
 import { createAccount, listAccounts, patchAccount, removeAccount, verifyAccount } from "../services/accounts.js";
 import { listAudit } from "../services/audit.js";
+import { bindHostMatches, hostMatchSuggestions } from "../services/hostMatching.js";
 import {
   addHostAddress,
   confirmHostImport,
@@ -186,6 +187,24 @@ export function apiRoutes(ctx: AppContext): Hono {
       payload.expectedCount,
     );
     return c.json({ data: result });
+  });
+
+  // host link suggestions
+  api.get("/host-links/suggestions", (c) => c.json({ data: hostMatchSuggestions(ctx) }));
+  api.post("/host-links/bind", async (c) => {
+    const body = (await readJson(c)) as { items?: unknown };
+    if (!Array.isArray(body.items)) throw new HttpError(422, "VALIDATION_ERROR", "items 必须是数组");
+    const items = body.items.map((raw) => {
+      const item = raw as Record<string, unknown>;
+      const zoneId = typeof item.zoneId === "string" ? item.zoneId : "";
+      const remoteId = typeof item.remoteId === "string" ? item.remoteId : "";
+      const addressId = typeof item.addressId === "string" ? item.addressId : "";
+      if (!zoneId || !remoteId || !addressId) {
+        throw new HttpError(422, "VALIDATION_ERROR", "items 每项都要有 zoneId / remoteId / addressId");
+      }
+      return { zoneId, remoteId, addressId };
+    });
+    return c.json({ data: bindHostMatches(ctx, items) });
   });
 
   // search + audit
