@@ -7,6 +7,7 @@ import {
   hostPatchSchema,
   hostRolloutApplySchema,
   hostRolloutPlanSchema,
+  httpsCheckSchema,
   recordStatusSchema,
   updateRecordSchema,
 } from "@dnsit/shared";
@@ -17,6 +18,7 @@ import { HttpError } from "../errors.js";
 import { createAccount, listAccounts, patchAccount, removeAccount, verifyAccount } from "../services/accounts.js";
 import { listAudit } from "../services/audit.js";
 import { bindHostMatches, hostMatchSuggestions } from "../services/hostMatching.js";
+import { checkHttpsDomain } from "../services/httpsChecks.js";
 import {
   addHostAddress,
   confirmHostImport,
@@ -130,6 +132,10 @@ export function apiRoutes(ctx: AppContext): Hono {
   );
   api.get("/zones/:id/lines", async (c) => c.json({ data: await zoneLines(ctx, c.req.param("id")) }));
   api.get("/zones/:id/record-types", async (c) => c.json({ data: await zoneRecordTypes(ctx, c.req.param("id")) }));
+  api.post("/https-check", async (c) => {
+    const payload = parseBody(httpsCheckSchema, await readJson(c));
+    return c.json({ data: await checkHttpsDomain(payload.domain) });
+  });
 
   // hosts
   api.get("/hosts", (c) =>

@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app.js";
 import type { AppContext } from "../context.js";
 import { SecretBox } from "../crypto.js";
@@ -26,6 +26,10 @@ describe("api app", () => {
   beforeEach(() => {
     ctx = makeContext();
     app = createApp(ctx);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("serves health", async () => {
@@ -158,6 +162,36 @@ describe("api app", () => {
       body: JSON.stringify({ name: "甲" }),
     });
     expect(response.status).toBe(409);
+  });
+
+  it("checks https reachability for a domain", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 200 })));
+    const response = await app.request("/api/https-check", {
+      method: "POST",
+      headers: WRITE,
+      body: JSON.stringify({ domain: "www.example.com" }),
+    });
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      data: { domain: string; state: string; ok: boolean; httpStatus: number };
+    };
+    expect(payload.data).toMatchObject({
+      domain: "www.example.com",
+      state: "OK",
+      ok: true,
+      httpStatus: 200,
+    });
+  });
+
+  it("marks wildcard domains as untestable", async () => {
+    const response = await app.request("/api/https-check", {
+      method: "POST",
+      headers: WRITE,
+      body: JSON.stringify({ domain: "*.example.com" }),
+    });
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { data: { state: string; ok: boolean } };
+    expect(payload.data).toMatchObject({ state: "INVALID", ok: false });
   });
 
   it("returns 404 for unknown routes", async () => {

@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react";
-import type { NormalizedRecord } from "@dnsit/shared";
+import type { HttpsCheckResult, NormalizedRecord } from "@dnsit/shared";
+import { CopyableDomain } from "@/components/CopyableDomain";
+import { HttpsStatusBadge } from "@/components/HttpsStatusBadge";
 import { RecordActions, RecordStatus, RecordTypeBadge, RecordValue } from "@/components/RecordRow";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowDown, ArrowUp, ArrowUpDown, SearchX } from "lucide-react";
+import { domainKey } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 
 type SortKey = "name" | "type" | "ttl" | "status";
@@ -58,12 +61,14 @@ export function RecordTable({
   onDelete,
   onToggle,
   onResetFilters,
+  httpsResults,
 }: {
   records: NormalizedRecord[];
   onEdit: (record: NormalizedRecord) => void;
   onDelete: (record: NormalizedRecord) => void;
   onToggle: (record: NormalizedRecord) => void;
   onResetFilters?: () => void;
+  httpsResults?: Record<string, HttpsCheckResult>;
 }) {
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({ key: "name", direction: "asc" });
 
@@ -101,7 +106,7 @@ export function RecordTable({
 
   return (
     <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_0_rgb(0_0_0/0.03)]">
-      <Table className="min-w-[1020px] table-fixed" aria-label="解析记录列表">
+      <Table className="min-w-[1128px] table-fixed" aria-label="解析记录列表">
         <TableHeader className="bg-muted/45">
           <TableRow className="border-border/70 hover:bg-transparent">
             <TableHead
@@ -130,6 +135,7 @@ export function RecordTable({
             >
               <SortableHeader label="状态" column="status" sort={sort} onSort={changeSort} />
             </TableHead>
+            <TableHead className="h-10 w-[108px] px-3 text-[11px] font-medium text-muted-foreground">HTTPS 检测</TableHead>
             <TableHead className="sticky right-0 z-20 h-10 w-[76px] border-l border-border/60 bg-muted px-3">
               <span className="sr-only">操作</span>
             </TableHead>
@@ -142,19 +148,21 @@ export function RecordTable({
               className="group border-border/55 transition-colors hover:bg-blue-500/[0.025] dark:hover:bg-blue-400/[0.035]"
             >
               <TableCell className="px-4 py-3 whitespace-normal">
-                <button
-                  type="button"
-                  className="flex w-full min-w-0 flex-col rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                  onClick={() => onEdit(record)}
-                  title={`编辑 ${record.fqdn}`}
-                >
-                  <span className="truncate text-[13px] font-semibold text-foreground transition-colors group-hover:text-blue-700 dark:group-hover:text-blue-300">
+                <div className="flex min-w-0 flex-col items-start">
+                  <button
+                    type="button"
+                    className="max-w-full min-w-0 truncate rounded-sm text-left text-[13px] font-semibold text-foreground transition-colors group-hover:text-blue-700 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none dark:group-hover:text-blue-300"
+                    onClick={() => onEdit(record)}
+                    title={`编辑 ${record.fqdn}`}
+                  >
                     {record.name}
-                  </span>
-                  <span className="mt-1 truncate font-mono text-[11px] font-normal text-muted-foreground">
-                    {record.fqdn}
-                  </span>
-                </button>
+                  </button>
+                  <CopyableDomain
+                    domain={record.fqdn}
+                    label="完整域名"
+                    className="mt-1 font-mono text-[11px] font-normal text-muted-foreground transition-colors hover:text-foreground"
+                  />
+                </div>
               </TableCell>
               <TableCell className="px-3 py-3">
                 <RecordTypeBadge type={record.type} />
@@ -184,6 +192,13 @@ export function RecordTable({
               </TableCell>
               <TableCell className="px-3 py-3">
                 <RecordStatus status={record.status} />
+              </TableCell>
+              <TableCell className="px-3 py-3">
+                {httpsResults?.[domainKey(record.fqdn)] ? (
+                  <HttpsStatusBadge result={httpsResults[domainKey(record.fqdn)]} />
+                ) : (
+                  <span className="text-xs text-muted-foreground/35">—</span>
+                )}
               </TableCell>
               <TableCell className="sticky right-0 z-[5] border-l border-border/45 bg-card px-3 py-3">
                 <RecordActions record={record} onEdit={onEdit} onDelete={onDelete} onToggle={onToggle} />

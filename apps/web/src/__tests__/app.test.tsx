@@ -62,10 +62,24 @@ const records = {
 function stubFetch(recordPayload = records) {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: RequestInfo | URL) => {
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const json = (data: unknown) =>
         new Response(JSON.stringify({ data }), { status: 200, headers: { "content-type": "application/json" } });
+      if (url.includes("/https-check")) {
+        const body = JSON.parse(String(init?.body ?? "{}")) as { domain?: string };
+        const domain = body.domain ?? "unknown.example.com";
+        const reachable = domain !== "blog.example.com";
+        return json({
+          domain,
+          state: reachable ? "OK" : "HTTP_ERROR",
+          ok: reachable,
+          httpStatus: reachable ? 200 : 404,
+          finalUrl: `https://${domain}/`,
+          elapsedMs: 12,
+          checkedAt: new Date().toISOString(),
+        });
+      }
       if (url.includes("/accounts"))
         return json([
           {
@@ -252,5 +266,44 @@ describe("web app", () => {
     expect(screen.getByText("a")).toBeTruthy();
     expect(screen.queryByText("b")).toBeNull();
     expect(screen.queryByText("b.example.com")).toBeNull();
+  });
+
+  it("tests https reachability for the records on the page", async () => {
+    stubFetch();
+    renderApp("/zones/z1?view=table");
+    const table = await screen.findByRole("table", { name: "解析记录列表" });
+    await within(table).findByText("api");
+    fireEvent.click(screen.getByRole("button", { name: "测试 HTTPS" }));
+    await waitFor(() => expect(within(table).getAllByText("HTTPS 正常")).toHaveLength(2));
+    expect(within(table).getByText("HTTP 404")).toBeTruthy();
+  });
+
+  it("shows https results on the corresponding cname tree nodes", async () => {
+    stubFetch();
+    renderApp("/zones/z1");
+    await screen.findByText("www");
+    fireEvent.click(screen.getByRole("button", { name: "测试 HTTPS" }));
+    await waitFor(() => expect(screen.getAllByText("HTTPS 正常")).toHaveLength(2));
+    expect(screen.getByText("HTTP 404")).toBeTruthy();
+  });
+
+  it("copies a record domain by clicking the domain text in the table view", async () => {
+    stubFetch();
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    renderApp("/zones/z1?view=table");
+    const table = await screen.findByRole("table", { name: "解析记录列表" });
+    fireEvent.click(await within(table).findByRole("button", { name: "api.example.com" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("api.example.com"));
+  });
+
+  it("copies a domain via the copy button in the cname tree", async () => {
+    stubFetch();
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    renderApp("/zones/z1");
+    await screen.findByText("www");
+    fireEvent.click(screen.getByRole("button", { name: "复制域名 www.example.com" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("www.example.com"));
   });
 });

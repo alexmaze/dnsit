@@ -124,3 +124,7 @@ export const hostRolloutApplySchema = z.object({
 });
 
 export const knownRecordTypes = RECORD_TYPES;
+
+export const httpsCheckSchema = z.object({
+  domain: z.string().trim().min(1, "域名不能为空").max(253, "域名过长"),
+});

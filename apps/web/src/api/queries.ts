@@ -3,6 +3,7 @@ import type {
   AccountSummary,
   HostDTO,
   HostUsageRow,
+  HttpsCheckResult,
   NormalizedRecord,
   ZoneSummary,
 } from "@dnsit/shared";
@@ -76,6 +77,10 @@ export function useZoneLines(zoneId: string | undefined) {
     staleTime: 3_600_000,
     retry: false,
   });
+}
+
+export function checkDomainHttps(domain: string) {
+  return api.post<HttpsCheckResult>("/https-check", { domain });
 }
 
 export function useAudit(page: number) {

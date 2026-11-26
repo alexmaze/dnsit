@@ -1,6 +1,6 @@
 import { Copy, MessageSquareText, MoreHorizontal, Pencil, Power, Server, Trash2 } from "lucide-react";
-import { toast } from "sonner";
 import type { NormalizedRecord, RecordStatus as RecordStatusValue } from "@dnsit/shared";
+import { CopyButton, copyWithToast } from "@/components/CopyButton";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -21,15 +21,6 @@ const recordTypeStyles: Record<string, string> = {
   NS: "border-emerald-500/15 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300",
   SRV: "border-orange-500/15 bg-orange-500/8 text-orange-700 dark:text-orange-300",
 };
-
-async function copyText(text: string, label: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    toast.success(`已复制${label}`);
-  } catch {
-    toast.error("复制失败，请手动复制");
-  }
-}
 
 export function RecordTypeBadge({ type }: { type: string }) {
   const normalizedType = type.toUpperCase();
@@ -68,25 +59,11 @@ export function RecordStatus({ status }: { status: RecordStatusValue }) {
 export function RecordValue({ record }: { record: NormalizedRecord }) {
   return (
     <div className="min-w-0">
-      <div className="group/value flex min-w-0 items-center gap-1">
+      <div className="group/copy flex min-w-0 items-center gap-1">
         <span className="truncate font-mono text-[13px] font-medium text-foreground/90" title={record.value}>
           {record.value}
         </span>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="size-6 shrink-0 text-muted-foreground opacity-100 transition-opacity focus-visible:opacity-100 md:opacity-0 md:group-hover/value:opacity-100"
-              aria-label={`复制记录值 ${record.value}`}
-              onClick={() => void copyText(record.value, "记录值")}
-            >
-              <Copy className="size-3" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>复制记录值</TooltipContent>
-        </Tooltip>
+        <CopyButton text={record.value} label="记录值" />
       </div>
       {record.host ? (
         <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -159,10 +136,10 @@ export function RecordActions({ record, onEdit, onDelete, onToggle }: RecordActi
             <Power className="size-3.5" /> {record.status === "ENABLE" ? "停用记录" : "启用记录"}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => void copyText(record.fqdn, "完整域名")}>
+          <DropdownMenuItem onClick={() => void copyWithToast(record.fqdn, "完整域名")}>
             <Copy className="size-3.5" /> 复制完整域名
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => void copyText(record.value, "记录值")}>
+          <DropdownMenuItem onClick={() => void copyWithToast(record.value, "记录值")}>
             <Copy className="size-3.5" /> 复制记录值
           </DropdownMenuItem>
           <DropdownMenuSeparator />

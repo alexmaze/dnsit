@@ -13,16 +13,20 @@ import {
   TriangleAlert,
   Unlink,
 } from "lucide-react";
-import type { NormalizedRecord, TreeEdge, TreeNode, ZoneTree } from "@dnsit/shared";
+import type { HttpsCheckResult, NormalizedRecord, TreeEdge, TreeNode, ZoneTree } from "@dnsit/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { CopyableDomain } from "@/components/CopyableDomain";
+import { HttpsStatusBadge } from "@/components/HttpsStatusBadge";
 import { RecordRow } from "@/components/RecordRow";
+import { domainKey } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 
 interface TreeProps {
   tree: ZoneTree;
   visibleRecordIds?: ReadonlySet<string>;
+  httpsResults?: Record<string, HttpsCheckResult>;
   onEdit: (record: NormalizedRecord) => void;
   onDelete: (record: NormalizedRecord) => void;
   onToggle: (record: NormalizedRecord) => void;
@@ -132,6 +136,7 @@ function Branch({
   ancestors,
   visibleEdges,
   visibleRecordIds,
+  httpsResults,
   onEdit,
   onDelete,
   onToggle,
@@ -187,19 +192,17 @@ function Branch({
           node.dangling && "bg-destructive/[0.035]",
         )}
       >
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          onClick={() => setOpen((value) => !value)}
-          disabled={!hasChildren || repeatsAncestor}
-          aria-expanded={hasChildren ? open && !repeatsAncestor : undefined}
-          aria-label={`${actionLabel}${statusDescription ? `，${statusDescription}` : ""}`}
-        >
-          <span
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <button
+            type="button"
             className={cn(
-              "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors",
+              "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
               hasChildren && !repeatsAncestor && "hover:bg-accent hover:text-foreground",
             )}
+            onClick={() => setOpen((value) => !value)}
+            disabled={!hasChildren || repeatsAncestor}
+            aria-expanded={hasChildren ? open && !repeatsAncestor : undefined}
+            aria-label={`${actionLabel}${statusDescription ? `，${statusDescription}` : ""}`}
           >
             {hasChildren ? (
               open && !repeatsAncestor ? (
@@ -210,7 +213,7 @@ function Branch({
             ) : (
               <span className="size-1 rounded-full bg-muted-foreground/30" />
             )}
-          </span>
+          </button>
           <span
             className={cn(
               "flex size-8 shrink-0 items-center justify-center rounded-lg border",
@@ -221,16 +224,34 @@ function Branch({
           >
             {depth === 0 ? <Globe className="size-4" /> : <Link2 className="size-3.5" />}
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="font-mono text-sm font-semibold tracking-tight text-foreground">{node.name}</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <button
+                type="button"
+                className={cn(
+                  "max-w-full min-w-0 truncate rounded-sm text-left font-mono text-sm font-semibold tracking-tight text-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+                  hasChildren && !repeatsAncestor && "hover:text-blue-700 dark:hover:text-blue-300",
+                )}
+                onClick={() => setOpen((value) => !value)}
+                disabled={!hasChildren || repeatsAncestor}
+                title={
+                  hasChildren && !repeatsAncestor
+                    ? `${open ? "收起" : "展开"} ${node.fqdn} 的引用记录`
+                    : node.fqdn
+                }
+              >
+                {node.name}
+              </button>
               <NodeBadges node={node} />
-            </span>
-            <span className="mt-0.5 block truncate font-mono text-[11px] font-normal text-muted-foreground">
-              {node.fqdn}
-            </span>
-          </span>
-        </button>
+              <HttpsStatusBadge result={httpsResults?.[domainKey(node.fqdn)]} />
+            </div>
+            <CopyableDomain
+              domain={node.fqdn}
+              label="域名"
+              className="mt-0.5 font-mono text-[11px] font-normal text-muted-foreground transition-colors hover:text-foreground"
+            />
+          </div>
+        </div>
         <div className="hidden shrink-0 items-center gap-3 text-[11px] text-muted-foreground sm:flex">
           {!node.dangling ? (
             <span>
@@ -266,7 +287,11 @@ function Branch({
             <div key={`${external.fqdn}-${index}`} className="flex min-w-0 flex-wrap items-center gap-2 text-[11px]">
               <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="shrink-0 text-muted-foreground">外部目标</span>
-              <span className="min-w-0 truncate font-mono text-xs font-medium text-foreground/75">{external.fqdn}</span>
+              <CopyableDomain
+                domain={external.fqdn}
+                label="域名"
+                className="min-w-0 font-mono text-xs font-medium text-foreground/75 transition-colors hover:text-foreground"
+              />
               {external.inPlatform ? (
                 <button
                   type="button"
@@ -303,6 +328,7 @@ function Branch({
                     ancestors={new Set(ancestors).add(node)}
                     visibleEdges={visibleEdges}
                     visibleRecordIds={visibleRecordIds}
+                    httpsResults={httpsResults}
                     onEdit={onEdit}
                     onDelete={onDelete}
                     onToggle={onToggle}
@@ -321,6 +347,7 @@ function Branch({
 export function CnameTree({
   tree,
   visibleRecordIds,
+  httpsResults,
   onEdit,
   onDelete,
   onToggle,
@@ -385,6 +412,7 @@ export function CnameTree({
             ancestors={new Set<TreeNode>()}
             visibleEdges={visibility.visibleEdges}
             visibleRecordIds={visibleRecordIds}
+            httpsResults={httpsResults}
             onEdit={onEdit}
             onDelete={onDelete}
             onToggle={onToggle}

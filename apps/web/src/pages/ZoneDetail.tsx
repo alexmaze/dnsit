@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { CircleAlert, GitBranch, Globe, Plus, RefreshCw, Search, Table2, X } from "lucide-react";
+import { CircleAlert, CircleCheck, GitBranch, Globe, Loader2, MinusCircle, Plus, RefreshCw, Search, ShieldCheck, Table2, X } from "lucide-react";
 import { toast } from "sonner";
 import { buildZoneTree, knownRecordTypes } from "@dnsit/shared";
-import type { NormalizedRecord } from "@dnsit/shared";
+import type { HttpsCheckResult, NormalizedRecord } from "@dnsit/shared";
 import { api, errorMessage } from "@/api/client";
-import { useZoneRecords, useZones } from "@/api/queries";
+import { checkDomainHttps, useZoneRecords, useZones } from "@/api/queries";
 import { CnameTree } from "@/components/CnameTree";
 import { DeleteRecordDialog } from "@/components/DeleteRecordDialog";
 import { RecordDialog } from "@/components/RecordDialog";
@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { runWithConcurrency } from "@/lib/concurrency";
+import { domainKey } from "@/lib/domain";
 import { relativeTime, PROVIDER_LABEL } from "@/lib/format";
 
 export function ZoneDetail() {
@@ -33,6 +35,11 @@ export function ZoneDetail() {
   const [refreshToken, setRefreshToken] = useState(0);
   const [dialog, setDialog] = useState<{ mode: "create" | "edit"; record?: NormalizedRecord } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<NormalizedRecord | null>(null);
+  const [httpsResults, setHttpsResults] = useState<Record<string, HttpsCheckResult>>({});
+  const [httpsChecking, setHttpsChecking] = useState(false);
+  const [httpsChecked, setHttpsChecked] = useState(0);
+  const [httpsTotal, setHttpsTotal] = useState(0);
+  const httpsRunRef = useRef(0);
 
   const zones = useZones();
   const zone = zones.data?.find((item) => item.id === zoneId);
@@ -55,6 +62,19 @@ export function ZoneDetail() {
       );
     });
   }, [records, query, typeFilter, statusFilter]);
+
+  const httpsSummary = useMemo(() => {
+    const domains = new Set(filtered.map((record) => domainKey(record.fqdn)));
+    const results = Array.from(domains)
+      .map((domain) => httpsResults[domain])
+      .filter((result): result is HttpsCheckResult => Boolean(result));
+    return {
+      domainCount: domains.size,
+      ok: results.filter((result) => result.ok).length,
+      failed: results.filter((result) => !result.ok && result.state !== "INVALID").length,
+      invalid: results.filter((result) => result.state === "INVALID").length,
+    };
+  }, [filtered, httpsResults]);
 
   const platformZones = useMemo(
     () => (zones.data ?? []).map((item) => ({ name: item.name, zoneId: item.id })),
@@ -97,6 +117,21 @@ export function ZoneDetail() {
     return () => window.removeEventListener("keydown", handleKeyboard);
   }, [query]);
 
+  useEffect(() => {
+    httpsRunRef.current += 1;
+    setHttpsResults({});
+    setHttpsChecking(false);
+    setHttpsChecked(0);
+    setHttpsTotal(0);
+  }, [zoneId]);
+
+  useEffect(
+    () => () => {
+      httpsRunRef.current += 1;
+    },
+    [],
+  );
+
   function resetFilters() {
     setQuery("");
     setTypeFilter("ALL");
@@ -112,6 +147,59 @@ export function ZoneDetail() {
       await queryClient.invalidateQueries({ queryKey: ["zone", zoneId] });
     } catch (error) {
       toast.error(errorMessage(error), { duration: 9000 });
+    }
+  }
+
+  async function testHttps() {
+    if (httpsChecking) return;
+    const domains = Array.from(new Set(filtered.map((record) => domainKey(record.fqdn))));
+    if (domains.length === 0) {
+      toast.info("当前页面没有可测试的域名");
+      return;
+    }
+
+    const runId = httpsRunRef.current + 1;
+    httpsRunRef.current = runId;
+    setHttpsChecking(true);
+    setHttpsChecked(0);
+    setHttpsTotal(domains.length);
+    let okCount = 0;
+    let failedCount = 0;
+    let invalidCount = 0;
+
+    try {
+      await runWithConcurrency(domains, 6, async (domain) => {
+        if (httpsRunRef.current !== runId) return;
+        let result: HttpsCheckResult;
+        try {
+          result = await checkDomainHttps(domain);
+        } catch (error) {
+          result = {
+            domain,
+            state: "NETWORK_ERROR",
+            ok: false,
+            error: errorMessage(error),
+            elapsedMs: 0,
+            checkedAt: new Date().toISOString(),
+          };
+        }
+        if (httpsRunRef.current !== runId) return;
+        if (result.ok) okCount += 1;
+        else if (result.state === "INVALID") invalidCount += 1;
+        else failedCount += 1;
+        setHttpsResults((current) => ({ ...current, [domain]: result }));
+        setHttpsChecked((count) => count + 1);
+      });
+
+      if (httpsRunRef.current === runId) {
+        toast.success(
+          `HTTPS 测试完成：${okCount} 个正常，${failedCount} 个异常${
+            invalidCount > 0 ? `，${invalidCount} 个无法测试` : ""
+          }`,
+        );
+      }
+    } finally {
+      if (httpsRunRef.current === runId) setHttpsChecking(false);
     }
   }
 
@@ -159,7 +247,7 @@ export function ZoneDetail() {
               {` · 同步于 ${relativeTime(recordsQuery.data?.syncedAt ?? zone.lastSyncedAt)}`}
             </p>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -169,6 +257,21 @@ export function ZoneDetail() {
             >
               <RefreshCw className={`size-3.5 ${recordsQuery.isFetching ? "animate-spin" : ""}`} />
               刷新
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shadow-none"
+              title={`测试当前页面 ${httpsSummary.domainCount} 个域名的 HTTPS 可访问性`}
+              onClick={() => void testHttps()}
+              disabled={httpsChecking || filtered.length === 0}
+            >
+              {httpsChecking ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <ShieldCheck className="size-3.5" />
+              )}
+              {httpsChecking ? `测试中 ${httpsChecked}/${httpsTotal}` : "测试 HTTPS"}
             </Button>
             <Button
               size="sm"
@@ -279,6 +382,30 @@ export function ZoneDetail() {
               )}
             </p>
             <div className="ml-auto flex flex-wrap items-center gap-2">
+              {httpsSummary.ok > 0 ? (
+                <Badge
+                  variant="outline"
+                  className="h-6 gap-1.5 border-emerald-500/20 bg-emerald-500/5 px-2 text-[10px] font-medium text-emerald-700 dark:text-emerald-400"
+                >
+                  <CircleCheck className="size-3" /> HTTPS 正常 {httpsSummary.ok}
+                </Badge>
+              ) : null}
+              {httpsSummary.failed > 0 ? (
+                <Badge
+                  variant="outline"
+                  className="h-6 gap-1.5 border-destructive/20 bg-destructive/5 px-2 text-[10px] font-medium text-destructive"
+                >
+                  <CircleAlert className="size-3" /> HTTPS 异常 {httpsSummary.failed}
+                </Badge>
+              ) : null}
+              {httpsSummary.invalid > 0 ? (
+                <Badge
+                  variant="outline"
+                  className="h-6 gap-1.5 border-border/70 bg-muted/40 px-2 text-[10px] font-medium text-muted-foreground"
+                >
+                  <MinusCircle className="size-3" /> 无法测试 {httpsSummary.invalid}
+                </Badge>
+              ) : null}
               {tree.stats.dangling > 0 ? (
                 <Badge
                   variant="outline"
@@ -340,6 +467,7 @@ export function ZoneDetail() {
             <CnameTree
               tree={tree}
               visibleRecordIds={visibleRecordIds}
+              httpsResults={httpsResults}
               onEdit={(record) => setDialog({ mode: "edit", record })}
               onDelete={setPendingDelete}
               onToggle={toggle}
@@ -349,6 +477,7 @@ export function ZoneDetail() {
           ) : (
             <RecordTable
               records={filtered}
+              httpsResults={httpsResults}
               onEdit={(record) => setDialog({ mode: "edit", record })}
               onDelete={setPendingDelete}
               onToggle={toggle}

@@ -142,3 +142,23 @@ export interface ApiErrorBody {
   retryable?: boolean;
   details?: unknown;
 }
+
+export type HttpsCheckState =
+  | "OK"
+  | "HTTP_ERROR"
+  | "DNS_ERROR"
+  | "TLS_ERROR"
+  | "TIMEOUT"
+  | "NETWORK_ERROR"
+  | "INVALID";
+
+export interface HttpsCheckResult {
+  domain: string;
+  state: HttpsCheckState;
+  ok: boolean;
+  httpStatus?: number;
+  finalUrl?: string;
+  error?: string;
+  elapsedMs: number;
+  checkedAt: string;
+}
